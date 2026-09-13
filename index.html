@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Internship Tracker</title>
+  <meta name="description" content="Track internship applications — company, role, status and follow-ups — entirely in your browser. No account, no server; data stays on your device.">
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --danger: #dc2626;
+      --radius: 12px;
+      --shadow: 0 1px 2px rgba(17, 24, 39, .06), 0 1px 3px rgba(17, 24, 39, .08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0f17;
+        --card: #131a26;
+        --text: #e5e7eb;
+        --muted: #9aa3b2;
+        --border: #26303f;
+        --accent: #3b82f6;
+        --danger: #f87171;
+        --shadow: none;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: var(--accent); }
+
+    header { padding: 32px 20px 8px; text-align: center; }
+    header h1 { margin: 0 0 4px; font-size: clamp(1.6rem, 3vw, 2.2rem); }
+    header p { margin: 0; color: var(--muted); }
+
+    main { max-width: 1080px; margin: 0 auto; padding: 16px 20px 48px; display: grid; gap: 20px; }
+    footer { text-align: center; color: var(--muted); font-size: .85rem; padding: 0 20px 40px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+    h2 { margin: 0 0 12px; font-size: 1.1rem; }
+
+    /* Summary counters */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+    .stat { padding: 14px 16px; }
+    .stat .n { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+    .stat .l { color: var(--muted); font-size: .85rem; }
+
+    /* Form */
+    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    form .full { grid-column: 1 / -1; }
+    label { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+    input, select, textarea {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+    }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+    textarea { min-height: 64px; resize: vertical; }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button {
+      font: inherit;
+      padding: 9px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { filter: brightness(1.08); }
+    button.danger { color: var(--danger); }
+    button.small { padding: 5px 10px; font-size: .85rem; }
+
+    /* List */
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    .toolbar h2 { margin: 0; }
+    .toolbar .filters { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; }
+    .toolbar input, .toolbar select { width: auto; min-width: 160px; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    td .sub { color: var(--muted); font-size: .85rem; }
+    td .notes {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-width: 40ch;
+      white-space: pre-line;
+    }
+    .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+    .s-wishlist    { background: #e5e7eb; color: #374151; }
+    .s-applied     { background: #dbeafe; color: #1e40af; }
+    .s-shortlisted { background: #ede9fe; color: #5b21b6; }
+    .s-interview   { background: #fef3c7; color: #92400e; }
+    .s-offer       { background: #d1fae5; color: #065f46; }
+    .s-rejected    { background: #fee2e2; color: #991b1b; }
+
+    .empty { text-align: center; color: var(--muted); padding: 32px 8px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+    /* Stack table rows into cards on small screens */
+    @media (max-width: 720px) {
+      table thead { display: none; }
+      table, tbody, tr, td { display: block; width: 100%; }
+      tr { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-top: 10px; }
+      td { border: 0; padding: 4px 0; }
+      td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        font-size: .75rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--muted);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Internship Tracker</h1>
+    <p>Keep every application in one place. Saved locally in your browser — nothing leaves your device.</p>
+  </header>
+
+  <main>
+    <section class="stats" aria-label="Summary">
+      <div class="card stat"><div class="n" id="stat-total">0</div><div class="l">Total</div></div>
+      <div class="card stat"><div class="n" id="stat-active">0</div><div class="l">In progress</div></div>
+      <div class="card stat"><div class="n" id="stat-offer">0</div><div class="l">Offers</div></div>
+      <div class="card stat"><div class="n" id="stat-rejected">0</div><div class="l">Rejected</div></div>
+    </section>
+
+    <section class="card" aria-labelledby="form-title">
+      <h2 id="form-title">Add application</h2>
+      <form id="app-form" autocomplete="off">
+        <label>Company *
+          <input id="f-company" required maxlength="80" placeholder="e.g. Zomato">
+        </label>
+        <label>Role *
+          <input id="f-role" required maxlength="80" placeholder="e.g. Frontend Developer Intern">
+        </label>
+        <label>Source
+          <input id="f-source" maxlength="40" placeholder="Internshala, LinkedIn, referral…" list="sources">
+        </label>
+        <datalist id="sources">
+          <option>Internshala</option>
+          <option>LinkedIn</option>
+          <option>Company website</option>
+          <option>Referral</option>
+          <option>Campus placement</option>
+        </datalist>
+        <label>Date applied
+          <input id="f-date" type="date">
+        </label>
+        <label>Status
+          <select id="f-status"></select>
+        </label>
+        <label>Stipend
+          <input id="f-stipend" maxlength="40" placeholder="e.g. ₹15,000 / month">
+        </label>
+        <label class="full">Link
+          <input id="f-link" type="url" placeholder="https://internshala.com/internship/detail/…">
+        </label>
+        <label class="full">Notes
+          <textarea id="f-notes" maxlength="1000" placeholder="Follow-up dates, contacts, interview prep…"></textarea>
+        </label>
+        <div class="actions full">
+          <button type="submit" class="primary" id="submit-btn">Add application</button>
+          <button type="button" id="cancel-btn" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="list-title">
+      <div class="toolbar">
+        <h2 id="list-title">Applications</h2>
+        <div class="filters">
+          <input id="search" type="search" placeholder="Search company, role, notes…" aria-label="Search applications">
+          <select id="filter-status" aria-label="Filter by status">
+            <option value="">All statuses</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button type="button" id="export-btn" class="small">Export JSON</button>
+          <button type="button" id="import-btn" class="small">Import JSON</button>
+          <input type="file" id="import-file" accept="application/json,.json" hidden>
+          <button type="button" id="clear-btn" class="small danger">Clear all</button>
+        </div>
+      </div>
+
+      <table id="table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Role</th>
+            <th>Applied</th>
+            <th>Status</th>
+            <th>Stipend</th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty" hidden></div>
+    </section>
+  </main>
+
+  <footer>
+    Data is stored in this browser's <code>localStorage</code>. Use <strong>Export JSON</strong> now and then to keep a backup or move to another device.
+  </footer>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 'internshala.applications.v1';
+      const STATUSES = ['Wishlist', 'Applied', 'Shortlisted', 'Interview', 'Offer', 'Rejected'];
+      const IN_PROGRESS = new Set(['Applied', 'Shortlisted', 'Interview']);
+      const DEFAULT_STATUS = 'Applied';
+
+      const $ = (sel) => document.querySelector(sel);
+      const form = $('#app-form');
+      const f = {
+        company: $('#f-company'), role: $('#f-role'), source: $('#f-source'), date: $('#f-date'),
+        status: $('#f-status'), stipend: $('#f-stipend'), link: $('#f-link'), notes: $('#f-notes'),
+      };
+      const formTitle = $('#form-title');
+      const submitBtn = $('#submit-btn');
+      const cancelBtn = $('#cancel-btn');
+      const table = $('#table');
+      const rows = $('#rows');
+      const empty = $('#empty');
+      const search = $('#search');
+      const filterStatus = $('#filter-status');
+      const importFile = $('#import-file');
+
+      // ---------- state & persistence ----------
+      let apps = load();
+      let editingId = null;
+
+      function load() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+          return Array.isArray(parsed) ? parsed.filter(isValid).map(normalize) : [];
+        } catch {
+          return [];
+        }
+      }
+      function save() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
+      }
+      function isValid(a) {
+        return a && typeof a === 'object' && typeof a.company === 'string' && typeof a.role === 'string';
+      }
+      function uid() {
+        return (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      }
+      function safeUrl(value) {
+        try {
+          const u = new URL(value);
+          return /^https?:$/.test(u.protocol) ? u.href : '';
+        } catch {
+          return '';
+        }
+      }
+      function normalize(raw) {
+        return {
+          id: typeof raw.id === 'string' && raw.id ? raw.id : uid(),
+          company: String(raw.company).trim(),
+          role: String(raw.role).trim(),
+          source: String(raw.source || '').trim(),
+          appliedOn: /^\d{4}-\d{2}-\d{2}$/.test(raw.appliedOn || '') ? raw.appliedOn : '',
+          status: STATUSES.includes(raw.status) ? raw.status : DEFAULT_STATUS,
+          stipend: String(raw.stipend || '').trim(),
+          link: safeUrl(String(raw.link || '')),
+          notes: String(raw.notes || '').trim(),
+          createdAt: Number(raw.createdAt) || Date.now(),
+          updatedAt: Number(raw.updatedAt) || Date.now(),
+        };
+      }
+
+      // ---------- dates ----------
+      function todayISO() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      function parseISO(iso) {
+        const d = iso ? new Date(iso + 'T00:00:00') : null;
+        return d && !isNaN(d) ? d : null;
+      }
+      function formatDate(iso) {
+        const d = parseISO(iso);
+        return d ? d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+      }
+      function daysAgo(app) {
+        const d = parseISO(app.appliedOn);
+        if (!d || !IN_PROGRESS.has(app.status)) return '';
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const days = Math.round((today - d) / 86400000);
+        if (days < 0) return '';
+        if (days === 0) return 'today';
+        return days === 1 ? '1 day ago' : `${days} days ago`;
+      }
+
+      // ---------- rendering ----------
+      function render() {
+        const q = search.value.trim().toLowerCase();
+        const st = filterStatus.value;
+        const list = apps
+          .filter((a) => !st || a.status === st)
+          .filter((a) => !q || [a.company, a.role, a.source, a.stipend, a.notes]
+            .some((v) => (v || '').toLowerCase().includes(q)))
+          .sort((a, b) => (b.appliedOn || '').localeCompare(a.appliedOn || '') || b.createdAt - a.createdAt);
+
+        rows.replaceChildren(...list.map(rowFor));
+        table.hidden = list.length === 0;
+        empty.hidden = list.length > 0;
+        empty.textContent = apps.length === 0
+          ? 'No applications yet — add your first one above.'
+          : 'Nothing matches your search or filter.';
+        renderStats();
+      }
+
+      function renderStats() {
+        $('#stat-total').textContent = apps.length;
+        $('#stat-active').textContent = apps.filter((a) => IN_PROGRESS.has(a.status)).length;
+        $('#stat-offer').textContent = apps.filter((a) => a.status === 'Offer').length;
+        $('#stat-rejected').textContent = apps.filter((a) => a.status === 'Rejected').length;
+      }
+
+      function rowFor(a) {
+        const tr = document.createElement('tr');
+        tr.append(
+          cell('Company', a.company, a.source ? `via ${a.source}` : ''),
+          roleCell(a),
+          cell('Applied', formatDate(a.appliedOn), daysAgo(a)),
+          cell('Status', badge(a.status)),
+          cell('Stipend', a.stipend || '—'),
+          actionsCell(a),
+        );
+        return tr;
+      }
+
+      function cell(label, main, sub) {
+        const td = document.createElement('td');
+        td.dataset.label = label;
+        td.append(main instanceof Node ? main : document.createTextNode(main ?? ''));
+        if (sub) {
+          const d = document.createElement('div');
+          d.className = 'sub';
+          d.textContent = sub;
+          td.append(d);
+        }
+        return td;
+      }
+
+      function roleCell(a) {
+        const td = cell('Role', a.role);
+        if (a.link) {
+          const d = document.createElement('div');
+          d.className = 'sub';
+          const link = document.createElement('a');
+          link.href = a.link;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = 'Open listing ↗';
+          d.append(link);
+          td.append(d);
+        }
+        if (a.notes) {
+          const d = document.createElement('div');
+          d.className = 'sub notes';
+          d.textContent = a.notes;
+          d.title = a.notes;
+          td.append(d);
+        }
+        return td;
+      }
+
+      function badge(status) {
+        const s = document.createElement('span');
+        s.className = 'badge s-' + status.toLowerCase();
+        s.textContent = status;
+        return s;
+      }
+
+      function actionsCell(a) {
+        const td = document.createElement('td');
+        const wrap = document.createElement('div');
+        wrap.className = 'row-actions';
+        const edit = document.createElement('button');
+        edit.type = 'button'; edit.className = 'small'; edit.textContent = 'Edit';
+        edit.addEventListener('click', () => startEdit(a.id));
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'small danger'; del.textContent = 'Delete';
+        del.addEventListener('click', () => remove(a.id));
+        wrap.append(edit, del);
+        td.append(wrap);
+        return td;
+      }
+
+      // ---------- form ----------
+      function readForm() {
+        return {
+          company: f.company.value.trim(),
+          role: f.role.value.trim(),
+          source: f.source.value.trim(),
+          appliedOn: f.date.value,
+          status: STATUSES.includes(f.status.value) ? f.status.value : DEFAULT_STATUS,
+          stipend: f.stipend.value.trim(),
+          link: safeUrl(f.link.value.trim()),
+          notes: f.notes.value.trim(),
+        };
+      }
+
+      function resetForm() {
+        editingId = null;
+        form.reset();
+        f.date.value = todayISO();
+        f.status.value = DEFAULT_STATUS;
+        formTitle.textContent = 'Add application';
+        submitBtn.textContent = 'Add application';
+        cancelBtn.hidden = true;
+      }
+
+      function startEdit(id) {
+        const a = apps.find((x) => x.id === id);
+        if (!a) return;
+        editingId = id;
+        f.company.value = a.company;
+        f.role.value = a.role;
+        f.source.value = a.source;
+        f.date.value = a.appliedOn;
+        f.status.value = a.status;
+        f.stipend.value = a.stipend;
+        f.link.value = a.link;
+        f.notes.value = a.notes;
+        formTitle.textContent = `Edit — ${a.company}`;
+        submitBtn.textContent = 'Save changes';
+        cancelBtn.hidden = false;
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        f.company.focus();
+      }
+
+      function remove(id) {
+        const a = apps.find((x) => x.id === id);
+        if (!a) return;
+        if (!confirm(`Delete "${a.company} — ${a.role}"?`)) return;
+        apps = apps.filter((x) => x.id !== id);
+        if (editingId === id) resetForm();
+        save();
+        render();
+      }
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const data = readForm();
+        const now = Date.now();
+        if (editingId) {
+          const i = apps.findIndex((a) => a.id === editingId);
+          if (i !== -1) apps[i] = { ...apps[i], ...data, updatedAt: now };
+        } else {
+          apps.push({ id: uid(), ...data, createdAt: now, updatedAt: now });
+        }
+        save();
+        resetForm();
+        render();
+      });
+      form.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && editingId) resetForm();
+      });
+      cancelBtn.addEventListener('click', resetForm);
+
+      // ---------- toolbar ----------
+      search.addEventListener('input', render);
+      filterStatus.addEventListener('change', render);
+
+      $('#export-btn').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(apps, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `internship-applications-${todayISO()}.json`;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      $('#import-btn').addEventListener('click', () => importFile.click());
+      importFile.addEventListener('change', async () => {
+        const file = importFile.files[0];
+        importFile.value = '';
+        if (!file) return;
+        try {
+          const incoming = JSON.parse(await file.text());
+          if (!Array.isArray(incoming)) throw new Error('expected a JSON array of applications');
+          const byId = new Map(apps.map((a) => [a.id, a]));
+          let added = 0, updated = 0;
+          for (const raw of incoming) {
+            if (!isValid(raw)) continue;
+            const a = normalize(raw);
+            if (byId.has(a.id)) { byId.set(a.id, { ...byId.get(a.id), ...a }); updated++; }
+            else { byId.set(a.id, a); added++; }
+          }
+          apps = [...byId.values()];
+          save();
+          render();
+          alert(`Imported ${added} new and updated ${updated} existing application(s).`);
+        } catch (err) {
+          alert('Could not import that file: ' + err.message);
+        }
+      });
+
+      $('#clear-btn').addEventListener('click', () => {
+        if (apps.length === 0) return;
+        if (!confirm(`Delete all ${apps.length} application(s)? This cannot be undone.`)) return;
+        apps = [];
+        save();
+        resetForm();
+        render();
+      });
+
+      // Keep multiple open tabs in sync.
+      window.addEventListener('storage', (e) => {
+        if (e.key === STORAGE_KEY) { apps = load(); render(); }
+      });
+
+      // ---------- init ----------
+      for (const s of STATUSES) {
+        f.status.append(new Option(s, s));
+        filterStatus.append(new Option(s, s));
+      }
+      resetForm();
+      render();
+    })();
+  </script>
+</body>
+</html>
